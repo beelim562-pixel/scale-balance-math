@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小小秤重大師 - 500g 彈簧磅教學遊戲</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Fredoka', 'Noto Sans TC', sans-serif;
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 50%, #e0e7ff 100%);
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        /* Animated Scale Spring Effect */
+        .scale-pan {
+            transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* Improved Needle rotation smoothly around dial center (150px, 205px) */
+        .needle {
+            transition: transform 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+            transform-origin: 150px 205px;
+        }
+
+        /* Drag & Drop Feedback */
+        .draggable-item {
+            cursor: grab;
+            transition: all 0.2s ease;
+        }
+
+        .draggable-item:active {
+            cursor: grabbing;
+            transform: scale(1.08);
+        }
+
+        .draggable-item:hover {
+            transform: translateY(-3px) scale(1.03);
+        }
+
+        .scale-drop-zone.drag-over {
+            filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.6));
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Custom Pulse Effects */
+        @keyframes subtle-bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .animate-subtle-bounce {
+            animation: subtle-bounce 2s infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between text-slate-800">
+
+    <!-- Header / Navbar -->
+    <header class="bg-white/80 backdrop-blur-md border-b border-sky-100 shadow-sm sticky top-0 z-30 px-4 py-3">
+        <div class="max-w-6xl mx-auto flex flex-wrap justify-between items-center gap-3">
+            <div class="flex items-center gap-3">
+                <div class="bg-amber-400 text-amber-900 p-2.5 rounded-2xl shadow-inner font-bold text-xl flex items-center justify-center w-12 h-12">
+                    ⚖️
+                </div>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-black text-sky-900 tracking-wide">小小秤重大師</h1>
+                    <p class="text-xs text-slate-500 font-semibold">1g - 500g 彈簧磅稱重小遊戲</p>
+                </div>
+            </div>
+
+            <!-- Score & Mode Bar -->
+            <div class="flex items-center gap-3 md:gap-6 bg-sky-50 px-4 py-2 rounded-2xl border border-sky-200">
+                <div class="flex items-center gap-1.5" title="得分">
+                    <i class="fa-solid fa-star text-amber-400 text-xl"></i>
+                    <span id="score-display" class="font-black text-lg text-slate-700">0</span>
+                </div>
+                <div class="h-6 w-px bg-sky-200"></div>
+                <div class="flex items-center gap-1.5" title="連勝">
+                    <i class="fa-solid fa-fire text-orange-500 text-xl"></i>
+                    <span id="streak-display" class="font-black text-lg text-slate-700">0</span>
+                </div>
+                <div class="h-6 w-px bg-sky-200"></div>
+                <button id="sound-btn" onclick="toggleSound()" class="text-slate-600 hover:text-sky-600 transition p-1">
+                    <i id="sound-icon" class="fa-solid fa-volume-high text-lg"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main class="max-w-6xl w-full mx-auto p-4 md:p-6 flex-1 flex flex-col gap-6">
+
+        <!-- Mode Selector & Instructions Header -->
+        <div class="bg-white rounded-3xl p-4 md:p-5 shadow-lg border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+            
+            <!-- Mode Switch Tabs (3 Modes) -->
+            <div class="flex flex-wrap md:flex-nowrap bg-slate-100 p-1.5 rounded-2xl w-full md:w-auto gap-1">
+                <button id="mode1-btn" onclick="switchMode(1)" class="flex-1 md:flex-initial px-4 py-2 rounded-xl font-bold text-xs md:text-sm transition-all duration-200 shadow-sm bg-white text-amber-700">
+                    <i class="fa-solid fa-bullseye mr-1"></i>模式一：目標重量挑戰
+                </button>
+                <button id="mode2-btn" onclick="switchMode(2)" class="flex-1 md:flex-initial px-4 py-2 rounded-xl font-bold text-xs md:text-sm transition-all duration-200 text-slate-500 hover:text-slate-800">
+                    <i class="fa-solid fa-calculator mr-1"></i>模式二：閱讀磅數模式
+                </button>
+                <button id="mode3-btn" onclick="switchMode(3)" class="flex-1 md:flex-initial px-4 py-2 rounded-xl font-bold text-xs md:text-sm transition-all duration-200 text-slate-500 hover:text-slate-800">
+                    <i class="fa-solid fa-hand-sparkles mr-1"></i>模式三：自由擺放 MODE
+                </button>
+            </div>
+
+            <!-- Task Description Banner -->
+            <div class="w-full md:w-auto flex-1 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2.5 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <i class="fa-regular fa-lightbulb text-amber-500 text-lg"></i>
+                    <span id="task-instruction" class="font-bold text-slate-700 text-sm md:text-base">
+                        挑選適當物品，湊齊指定的目標重量！
+                    </span>
+                </div>
+                <!-- Target Weight Tag (For Mode 1) -->
+                <div id="target-weight-badge" class="bg-amber-500 text-white font-black px-3 py-1 rounded-xl text-lg shadow-sm whitespace-nowrap animate-subtle-bounce">
+                    目標: <span id="target-weight-val">0</span>g
+                </div>
+            </div>
+        </div>
+
+        <!-- Scale & Playground Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            <!-- Left Side: Interactive Scale Area (7 Cols) -->
+            <div class="lg:col-span-7 bg-white rounded-3xl p-6 shadow-xl border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden">
+                
+                <!-- Digital Screen Toggle Control -->
+                <div class="absolute top-4 right-4 flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600">
+                    <span>顯示數碼屏</span>
+                    <button id="toggle-digital-btn" onclick="toggleDigitalDisplay()" class="w-10 h-6 bg-emerald-500 rounded-full p-0.5 transition duration-200 ease-in-out relative">
+                        <div id="toggle-digital-dot" class="w-5 h-5 bg-white rounded-full shadow-md transform translate-x-4 transition duration-200"></div>
+                    </button>
+                </div>
+
+                <!-- Interactive SVG Weighing Scale -->
+                <div class="relative w-full max-w-[420px] aspect-square flex flex-col items-center justify-center mt-2">
+                    
+                    <svg viewBox="0 0 300 340" class="w-full h-full drop-shadow-md">
+                        <defs>
+                            <!-- Metallic Gradients -->
+                            <linearGradient id="panGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#f8fafc"/>
+                                <stop offset="50%" stop-color="#cbd5e1"/>
+                                <stop offset="100%" stop-color="#94a3b8"/>
+                            </linearGradient>
+                            <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#38bdf8"/>
+                                <stop offset="100%" stop-color="#0284c7"/>
+                            </linearGradient>
+                            <linearGradient id="dialGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#ffffff"/>
+                                <stop offset="100%" stop-color="#f1f5f9"/>
+                            </linearGradient>
+                        </defs>
+
+                        <!-- Base Shadow -->
+                        <ellipse cx="150" cy="325" rx="110" ry="12" fill="#0f172a" opacity="0.15"/>
+
+                        <!-- Scale Body Base -->
+                        <path d="M 60 210 L 80 320 L 220 320 L 240 210 Z" fill="url(#bodyGrad)" stroke="#0369a1" stroke-width="3" rx="10"/>
+
+                        <!-- Scale Neck / Support Rod -->
+                        <rect id="scale-rod" x="142" y="70" width="16" height="50" fill="#64748b" stroke="#334155" stroke-width="2"/>
+
+                        <!-- Pan Support Arms -->
+                        <path d="M 100 70 L 150 85 L 200 70" fill="none" stroke="#475569" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+                        <!-- Scale Pan (Top Dish) - Interactive Drop Target -->
+                        <g id="scale-pan-group" class="scale-pan scale-drop-zone cursor-pointer" onclick="clearScalePan()" title="按一下清空磅盤">
+                            <ellipse cx="150" cy="55" rx="105" ry="18" fill="url(#panGrad)" stroke="#64748b" stroke-width="3"/>
+                            <ellipse cx="150" cy="53" rx="98" ry="13" fill="#e2e8f0" opacity="0.7"/>
+                            <!-- Items Mounted Container (SVG rendered dynamically) -->
+                            <g id="pan-items-svg-container"></g>
+                        </g>
+
+                        <!-- Main Dial Housing -->
+                        <circle cx="150" cy="180" r="95" fill="url(#bodyGrad)" stroke="#0369a1" stroke-width="4"/>
+                        <circle cx="150" cy="180" r="88" fill="url(#dialGrad)" stroke="#cbd5e1" stroke-width="2"/>
+
+                        <!-- Dial Face Markings (0 - 500g) -->
+                        <g id="dial-ticks"></g>
+
+                        <!-- Scale Center Hub -->
+                        <circle cx="150" cy="180" r="12" fill="#1e293b"/>
+                        <circle cx="150" cy="180" r="5" fill="#f8fafc"/>
+
+                        <!-- Rotating Needle (Default pointing straight up at 0g / 12 o'clock) -->
+                        <g id="needle-group" class="needle" style="transform: rotate(0deg); transform-origin: 150px 180px;">
+                            <path d="M 146 180 L 148.5 93 L 150 90 L 151.5 93 L 154 180 Z" fill="#ef4444"/>
+                            <circle cx="150" cy="180" r="7" fill="#dc2626"/>
+                        </g>
+
+                        <!-- Digital Display LED Box (Moved into scale base area so it never overlaps the dial) -->
+                        <g id="digital-screen-group" class="transition-opacity duration-300">
+                            <rect x="100" y="285" width="100" height="30" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+                            <text id="digital-screen-text" x="150" y="306" fill="#38bdf8" font-family="'Courier New', monospace" font-weight="bold" font-size="18" text-anchor="middle">0g</text>
+                        </g>
+                    </svg>
+                </div>
+
+                <p class="text-xs text-slate-400 font-semibold mt-1">💡 點擊磅盤可隨時清空所有物品</p>
+            </div>
+
+            <!-- Right Side: Items Tray & Controls (5 Cols) -->
+            <div class="lg:col-span-5 flex flex-col gap-5">
+                
+                <!-- Answer / Control Box -->
+                <div class="bg-white rounded-3xl p-5 shadow-xl border border-slate-100 flex flex-col gap-4">
+                    <h2 class="font-extrabold text-slate-800 text-lg flex items-center justify-between">
+                        <span><i class="fa-solid fa-gamepad text-sky-500 mr-2"></i>答題與操作</span>
+                        <span id="pan-count-badge" class="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full font-bold">已放 0 件</span>
+                    </h2>
+
+                    <!-- Mode 1 Challenge Section (目標重量) -->
+                    <div id="mode1-input-section" class="flex flex-col gap-3">
+                        <div class="bg-amber-50 p-3 rounded-2xl border border-amber-200 text-center">
+                            <p class="text-xs font-bold text-amber-800">目前磅上重量：</p>
+                            <p id="mode1-current-weight" class="text-3xl font-black text-amber-600">0 g</p>
+                        </div>
+                        <button onclick="checkTargetMatch()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-extrabold py-3.5 rounded-2xl shadow-lg shadow-amber-500/30 transition transform active:scale-95 text-base">
+                            驗證是否湊齊目標重量
+                        </button>
+                    </div>
+
+                    <!-- Mode 2 Input Section (閱讀磅數) -->
+                    <div id="mode2-input-section" class="hidden flex-col gap-3">
+                        <label class="text-xs font-bold text-slate-500">請觀察指針，輸入磅上的總重量 (g)：</label>
+                        <div class="flex items-center gap-2">
+                            <div class="relative flex-1">
+                                <input type="number" id="weight-input" placeholder="0" min="0" max="500" class="w-full bg-slate-50 border-2 border-slate-200 focus:border-sky-500 focus:bg-white rounded-2xl py-3 px-4 text-2xl font-black text-slate-800 outline-none transition text-center pr-10">
+                                <span class="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">g</span>
+                            </div>
+                            <button onclick="submitAnswer()" class="bg-sky-500 hover:bg-sky-600 text-white font-extrabold px-6 py-3.5 rounded-2xl shadow-lg shadow-sky-500/30 transition transform active:scale-95 text-base whitespace-nowrap">
+                                提交答案
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Mode 3 Free Mode Display Section -->
+                    <div id="mode3-info-section" class="hidden flex-col gap-3">
+                        <div class="bg-indigo-50 p-4 rounded-2xl border border-indigo-200 text-center">
+                            <p class="text-xs font-bold text-indigo-700">自由擺放模式 · 目前總重：</p>
+                            <p id="mode3-current-weight" class="text-3xl font-black text-indigo-600">0 g</p>
+                            <p class="text-xs text-indigo-400 mt-1">隨心所欲將右下角物品放上磅盤探索吧！</p>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Feedback Message Alert -->
+                    <div id="feedback-msg" class="hidden rounded-2xl p-3 text-center text-sm font-bold transition-all"></div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex gap-2 border-t border-slate-100 pt-3">
+                        <button onclick="resetCurrentQuestion()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2.5 rounded-xl transition text-sm">
+                            <i class="fa-solid fa-rotate-left mr-1"></i>清空磅盤
+                        </button>
+                        <button id="next-btn" onclick="nextQuestion()" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 rounded-xl transition text-sm shadow-md shadow-emerald-500/20">
+                            <i class="fa-solid fa-forward mr-1"></i>下一題
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Items Palette Box -->
+                <div class="bg-white rounded-3xl p-5 shadow-xl border border-slate-100 flex flex-col gap-3">
+                    <h3 class="font-extrabold text-slate-800 text-sm flex items-center justify-between">
+                        <span><i class="fa-solid fa-boxes-stacked text-amber-500 mr-2"></i>物品寶庫 (可點擊或拖曳)</span>
+                        <span class="text-[10px] text-slate-400 font-semibold">單重 (g)</span>
+                    </h3>
+
+                    <!-- Grid of draggable items -->
+                    <div id="items-grid" class="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto p-1">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center py-4 text-xs font-semibold text-slate-400 border-t border-sky-100/60 bg-white/50">
+        小小秤重大師 &copy; 500g 彈簧磅教學遊戲
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        /* ===================================================================
+           1. ITEMS DATABASE & GAME STATE
+           =================================================================== */
+        const ITEMS_DB = [
+            { id: 'apple', name: '蘋果', weight: 150, emoji: '🍎' },
+            { id: 'book', name: '課本', weight: 200, emoji: '📘' },
+            { id: 'pencil', name: '鉛筆', weight: 10, emoji: '✏️' },
+            { id: 'water', name: '水壺', weight: 250, emoji: '🧴' },
+            { id: 'car', name: '玩具車', weight: 80, emoji: '🚗' },
+            { id: 'coin', name: '硬幣', weight: 5, emoji: '🪙' },
+            { id: 'block', name: '積木', weight: 25, emoji: '🧱' },
+            { id: 'banana', name: '香蕉', weight: 120, emoji: '🍌' },
+            { id: 'scissors', name: '剪刀', weight: 45, emoji: '✂️' },
+            { id: 'eraser', name: '橡皮擦', weight: 15, emoji: '🧹' }
+        ];
+
+        let currentMode = 1; // 1: Target Weight, 2: Read Scale, 3: Free Play
+        let scaleItems = []; // Items currently on scale pan
+        let currentScore = 0;
+        let streak = 0;
+        let targetWeight = 0; // For Mode 1
+        let isDigitalDisplayOn = true;
+        let soundEnabled = true;
+
+        /* ===================================================================
+           2. WEB AUDIO SYNTHESIZER (NO EXTERNAL AUDIO FILES)
+           =================================================================== */
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            try {
+                if (!audioCtx) audioCtx = new AudioCtx();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'add') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                } else if (type === 'remove') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, now);
+                    osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                } else if (type === 'correct') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25, now); // C5
+                    osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+                    osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+                    osc.start(now);
+                    osc.stop(now + 0.35);
+                } else if (type === 'wrong') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(200, now);
+                    osc.frequency.linearRampToValueAtTime(120, now + 0.25);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                }
+            } catch (e) {
+                console.log('Audio playback ignored', e);
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            if (soundEnabled) {
+                icon.className = 'fa-solid fa-volume-high text-lg';
+            } else {
+                icon.className = 'fa-solid fa-volume-xmark text-lg text-slate-400';
+            }
+        }
+
+        /* ===================================================================
+           3. SCALE DIAL GENERATOR (SVG Ticks 0-500g Full 360° Sweep)
+           =================================================================== */
+        function generateScaleTicks() {
+            const ticksGroup = document.getElementById('dial-ticks');
+            ticksGroup.innerHTML = '';
+
+            const cx = 150, cy = 180, r = 78;
+            const totalRange = 500;
+
+            for (let g = 0; g <= totalRange; g += 10) {
+                const angleDeg = (g / totalRange) * 360;
+                const angleRad = (angleDeg - 90) * (Math.PI / 180);
+
+                const isMajor50 = (g % 50 === 0);
+                const isMajor100 = (g % 100 === 0);
+
+                const tickLen = isMajor100 ? 14 : (isMajor50 ? 10 : 5);
+                const strokeWidth = isMajor100 ? 2.5 : (isMajor50 ? 1.8 : 1);
+                const strokeColor = isMajor100 ? '#0f172a' : (isMajor50 ? '#334155' : '#94a3b8');
+
+                const x1 = cx + (r - tickLen) * Math.cos(angleRad);
+                const y1 = cy + (r - tickLen) * Math.sin(angleRad);
+                const x2 = cx + r * Math.cos(angleRad);
+                const y2 = cy + r * Math.sin(angleRad);
+
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", x1);
+                line.setAttribute("y1", y1);
+                line.setAttribute("x2", x2);
+                line.setAttribute("y2", y2);
+                line.setAttribute("stroke", strokeColor);
+                line.setAttribute("stroke-width", strokeWidth);
+                line.setAttribute("stroke-linecap", "round");
+                ticksGroup.appendChild(line);
+
+                if (isMajor50) {
+                    const textR = r - 22;
+                    const tx = cx + textR * Math.cos(angleRad);
+                    const ty = cy + textR * Math.sin(angleRad) + 4;
+
+                    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    text.setAttribute("x", tx);
+                    text.setAttribute("y", ty);
+                    text.setAttribute("font-size", isMajor100 ? "11" : "9");
+                    text.setAttribute("font-weight", "bold");
+                    text.setAttribute("fill", isMajor100 ? "#0f172a" : "#475569");
+                    text.setAttribute("text-anchor", "middle");
+                    text.textContent = (g === 500) ? "500g" : (g === 0 ? "0" : g);
+                    ticksGroup.appendChild(text);
+                }
+            }
+        }
+
+        /* ===================================================================
+           4. RENDER & UPDATE UI LOGIC
+           =================================================================== */
+        function initItemsPalette() {
+            const grid = document.getElementById('items-grid');
+            grid.innerHTML = '';
+
+            ITEMS_DB.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'draggable-item bg-slate-50 hover:bg-sky-50 border border-slate-200 hover:border-sky-300 rounded-2xl p-2.5 flex flex-col items-center justify-center cursor-pointer select-none text-center shadow-sm';
+                card.draggable = true;
+
+                card.innerHTML = `
+                    <span class="text-2xl mb-1">${item.emoji}</span>
+                    <span class="font-bold text-xs text-slate-700">${item.name}</span>
+                    <span class="text-[10px] font-extrabold text-sky-600 bg-sky-100/70 px-2 py-0.5 rounded-full mt-1">${item.weight}g</span>
+                `;
+
+                card.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', JSON.stringify(item));
+                });
+
+                card.addEventListener('click', () => {
+                    addItemToScale(item);
+                });
+
+                grid.appendChild(card);
+            });
+        }
+
+        function calculateTotalWeight() {
+            return scaleItems.reduce((sum, item) => sum + item.weight, 0);
+        }
+
+        function updateScaleDisplay() {
+            const totalWeight = calculateTotalWeight();
+
+            const cappedWeight = Math.min(totalWeight, 500);
+            const angle = (cappedWeight / 500) * 360;
+
+            const needleGroup = document.getElementById('needle-group');
+            needleGroup.style.transform = `rotate(${angle}deg)`;
+
+            const digitalText = document.getElementById('digital-screen-text');
+            digitalText.textContent = `${totalWeight}g`;
+
+            renderPanItemsSVG();
+
+            const panGroup = document.getElementById('scale-pan-group');
+            panGroup.style.transform = 'translateY(6px)';
+            setTimeout(() => {
+                panGroup.style.transform = 'translateY(0px)';
+            }, 150);
+
+            document.getElementById('mode1-current-weight').textContent = `${totalWeight} g`;
+            document.getElementById('mode3-current-weight').textContent = `${totalWeight} g`;
+            document.getElementById('pan-count-badge').textContent = `已放 ${scaleItems.length} 件`;
+        }
+
+        function renderPanItemsSVG() {
+            const container = document.getElementById('pan-items-svg-container');
+            container.innerHTML = '';
+
+            const startX = 110;
+            
+            scaleItems.forEach((item, index) => {
+                const col = index % 4;
+                const row = Math.floor(index / 4);
+
+                const x = startX + col * 22;
+                const y = 42 - row * 16;
+
+                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                text.setAttribute("x", x);
+                text.setAttribute("y", y);
+                text.setAttribute("font-size", "22");
+                text.setAttribute("class", "cursor-pointer transition transform hover:scale-125");
+                text.textContent = item.emoji;
+
+                text.onclick = (e) => {
+                    e.stopPropagation();
+                    removeItemFromScale(index);
+                };
+
+                container.appendChild(text);
+            });
+        }
+
+        function addItemToScale(item) {
+            const currentTotal = calculateTotalWeight();
+            if (currentTotal + item.weight > 500) {
+                showFeedback('⚠️ 超出磅的極限 (最大 500g)！請選擇較輕的物品。', 'amber');
+                playSound('wrong');
+                return;
+            }
+
+            scaleItems.push(item);
+            playSound('add');
+            hideFeedback();
+            updateScaleDisplay();
+        }
+
+        function removeItemFromScale(index) {
+            scaleItems.splice(index, 1);
+            playSound('remove');
+            updateScaleDisplay();
+        }
+
+        function clearScalePan() {
+            if (scaleItems.length > 0) {
+                scaleItems = [];
+                playSound('remove');
+                updateScaleDisplay();
+                hideFeedback();
+            }
+        }
+
+        function toggleDigitalDisplay() {
+            isDigitalDisplayOn = !isDigitalDisplayOn;
+            const screenGroup = document.getElementById('digital-screen-group');
+            const toggleDot = document.getElementById('toggle-digital-dot');
+            const toggleBtn = document.getElementById('toggle-digital-btn');
+
+            if (isDigitalDisplayOn) {
+                screenGroup.style.opacity = '1';
+                toggleDot.style.transform = 'translateX(16px)';
+                toggleBtn.className = 'w-10 h-6 bg-emerald-500 rounded-full p-0.5 transition duration-200 ease-in-out relative';
+            } else {
+                screenGroup.style.opacity = '0';
+                toggleDot.style.transform = 'translateX(0px)';
+                toggleBtn.className = 'w-10 h-6 bg-slate-300 rounded-full p-0.5 transition duration-200 ease-in-out relative';
+            }
+        }
+
+        /* ===================================================================
+           5. GAME MODES & QUESTION LOGIC
+           =================================================================== */
+        function switchMode(mode) {
+            currentMode = mode;
+            const btn1 = document.getElementById('mode1-btn');
+            const btn2 = document.getElementById('mode2-btn');
+            const btn3 = document.getElementById('mode3-btn');
+            
+            const mode1Section = document.getElementById('mode1-input-section');
+            const mode2Section = document.getElementById('mode2-input-section');
+            const mode3Section = document.getElementById('mode3-info-section');
+            
+            const targetBadge = document.getElementById('target-weight-badge');
+            const taskText = document.getElementById('task-instruction');
+            const nextBtn = document.getElementById('next-btn');
+
+            // Reset tab styles
+            btn1.className = 'flex-1 md:flex-initial px-4 py-2 rounded-xl font-bold text-xs md:text-sm transition-all duration-200 text-slate-500 hover:text-slate-800';
+            btn2.className = 'flex-1 md:flex-initial px-4 py-2 rounded-xl font-bold text-xs md:text-sm transition-all duration-200 text-slate-500 hover:text-slate-800';
+            btn3.className = 'flex-1 md:flex-initial px-4 py-2 rounded-xl font-bold text-xs md:text-sm transition-all duration-200 text-slate-500 hover:text-slate-800';
+
+            mode1Section.classList.add('hidden');
+            mode2Section.classList.add('hidden');
+            mode3Section.classList.add('hidden');
+
+            if (mode === 1) {
+                btn1.className = 'flex-1 md:flex-initial px-4 py-2 rounded-xl font-bold text-xs md:text-sm transition-all duration-200 shadow-sm bg-white text-amber-700';
+                mode1Section.classList.remove('hidden');
+                targetBadge.classList.remove('hidden');
+                taskText.textContent = '挑選適當物品，湊齊指定的目標重量！';
+                nextBtn.classList.remove('hidden');
+            } else if (mode === 2) {
+                btn2.className = 'flex-1 md:flex-initial px-4 py-2 rounded-xl font-bold text-xs md:text-sm transition-all duration-200 shadow-sm bg-white text-sky-700';
+                mode2Section.classList.remove('hidden');
+                targetBadge.classList.add('hidden');
+                taskText.textContent = '觀察磅盤上的指針刻度，計算並輸入總重量！';
+                nextBtn.classList.remove('hidden');
+            } else {
+                btn3.className = 'flex-1 md:flex-initial px-4 py-2 rounded-xl font-bold text-xs md:text-sm transition-all duration-200 shadow-sm bg-white text-indigo-700';
+                mode3Section.classList.remove('hidden');
+                targetBadge.classList.add('hidden');
+                taskText.textContent = '自由模式：隨意擺放任何物品，探索指針與重量的變化！';
+                nextBtn.classList.add('hidden');
+            }
+
+            nextQuestion();
+        }
+
+        function generateNewQuestion() {
+            clearScalePan();
+            hideFeedback();
+            const inputElem = document.getElementById('weight-input');
+            if (inputElem) inputElem.value = '';
+
+            if (currentMode === 1) {
+                // Target Weight Challenge Mode
+                const count = Math.floor(Math.random() * 3) + 2;
+                let sum = 0;
+                for (let i = 0; i < count; i++) {
+                    const item = ITEMS_DB[Math.floor(Math.random() * ITEMS_DB.length)];
+                    if (sum + item.weight <= 500) {
+                        sum += item.weight;
+                    }
+                }
+                targetWeight = sum > 0 ? sum : 200;
+                document.getElementById('target-weight-val').textContent = targetWeight;
+            } else if (currentMode === 2) {
+                // Read Scale Mode (Prefill items)
+                const count = Math.floor(Math.random() * 3) + 2;
+                let currentSum = 0;
+                for (let i = 0; i < count; i++) {
+                    const validItems = ITEMS_DB.filter(item => currentSum + item.weight <= 480);
+                    if (validItems.length > 0) {
+                        const randomItem = validItems[Math.floor(Math.random() * validItems.length)];
+                        scaleItems.push(randomItem);
+                        currentSum += randomItem.weight;
+                    }
+                }
+                updateScaleDisplay();
+            } else {
+                // Free Mode
+                updateScaleDisplay();
+            }
+        }
+
+        function submitAnswer() {
+            if (currentMode !== 2) return;
+
+            const inputVal = parseInt(document.getElementById('weight-input').value);
+            const actualTotal = calculateTotalWeight();
+
+            if (isNaN(inputVal)) {
+                showFeedback('請輸入有效的數字答案！', 'amber');
+                playSound('wrong');
+                return;
+            }
+
+            if (inputVal === actualTotal) {
+                handleCorrectAnswer();
+            } else {
+                handleWrongAnswer(`答錯了～正確答案是 ${actualTotal}g。仔細觀察指針再試試！`);
+            }
+        }
+
+        function checkTargetMatch() {
+            if (currentMode !== 1) return;
+
+            const currentTotal = calculateTotalWeight();
+            if (currentTotal === targetWeight) {
+                handleCorrectAnswer();
+            } else if (currentTotal < targetWeight) {
+                handleWrongAnswer(`還不夠重哦！目前是 ${currentTotal}g，距離目標還差 ${targetWeight - currentTotal}g。`);
+            } else {
+                handleWrongAnswer(`太重了！目前是 ${currentTotal}g，超過了 ${currentTotal - targetWeight}g。`);
+            }
+        }
+
+        function handleCorrectAnswer() {
+            playSound('correct');
+            confetti({
+                particleCount: 80,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+
+            currentScore += 10;
+            streak += 1;
+            document.getElementById('score-display').textContent = currentScore;
+            document.getElementById('streak-display').textContent = streak;
+
+            showFeedback('🎉 答對了！太棒了！點擊「下一題」繼續挑戰。', 'emerald');
+        }
+
+        function handleWrongAnswer(msg) {
+            playSound('wrong');
+            streak = 0;
+            document.getElementById('streak-display').textContent = streak;
+            showFeedback(`❌ ${msg}`, 'rose');
+        }
+
+        function showFeedback(text, colorType) {
+            const box = document.getElementById('feedback-msg');
+            box.classList.remove('hidden', 'bg-emerald-100', 'text-emerald-800', 'bg-rose-100', 'text-rose-800', 'bg-amber-100', 'text-amber-800');
+
+            if (colorType === 'emerald') {
+                box.classList.add('bg-emerald-100', 'text-emerald-800');
+            } else if (colorType === 'rose') {
+                box.classList.add('bg-rose-100', 'text-rose-800');
+            } else {
+                box.classList.add('bg-amber-100', 'text-amber-800');
+            }
+
+            box.textContent = text;
+        }
+
+        function hideFeedback() {
+            const box = document.getElementById('feedback-msg');
+            box.classList.add('hidden');
+        }
+
+        function resetCurrentQuestion() {
+            clearScalePan();
+            hideFeedback();
+            document.getElementById('weight-input').value = '';
+        }
+
+        function nextQuestion() {
+            generateNewQuestion();
+        }
+
+        /* ===================================================================
+           6. DRAG & DROP EVENT LISTENERS
+           =================================================================== */
+        function initDragAndDrop() {
+            const panZone = document.getElementById('scale-pan-group');
+
+            panZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                panZone.classList.add('drag-over');
+            });
+
+            panZone.addEventListener('dragleave', () => {
+                panZone.classList.remove('drag-over');
+            });
+
+            panZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                panZone.classList.remove('drag-over');
+                const itemData = e.dataTransfer.getData('text/plain');
+                if (itemData) {
+                    try {
+                        const item = JSON.parse(itemData);
+                        addItemToScale(item);
+                    } catch (err) {
+                        console.error('Invalid drop item data');
+                    }
+                }
+            });
+        }
+
+        /* ===================================================================
+           7. INITIALIZATION ON WINDOW LOAD
+           =================================================================== */
+        window.onload = function() {
+            generateScaleTicks();
+            initItemsPalette();
+            initDragAndDrop();
+            generateNewQuestion();
+        };
+    </script>
+</body>
+</html>
